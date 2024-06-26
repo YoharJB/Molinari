@@ -1,79 +1,92 @@
-﻿local addon = ...
+﻿
+local addonName, ns = ...
+local button = CreateFrame('Button', addonName, UIParent, 'SecureActionButtonTemplate, AutoCastShineTemplate')
+button:SetScript('OnEvent', function(self, event, ...) self[event](self, ...) end)
+button:RegisterEvent('PLAYER_LOGIN')
 
-local button = CreateFrame('Button', addon, UIParent, 'SecureActionButtonTemplate, AutoCastShineTemplate')
-local macro = '/cast %s\n/use %s %s'
-local spells = {}
-
-local function ScanTooltip(text)
-	for index = 1, GameTooltip:NumLines() do
-		local info = spells[_G['GameTooltipTextLeft'..index]:GetText()]
+local function ScanTooltip(self, spells)
+	for index = 1, self:NumLines() do
+		local info = spells[_G['GameTooltipTextLeft' .. index]:GetText()]
 		if(info) then
 			return unpack(info)
 		end
 	end
 end
 
-local function Clickable()
-	return not InCombatLockdown() and IsAltKeyDown()
+function button:PLAYER_LOGIN()
+	local spells, disenchanter, rogue = {}
+	if(IsSpellKnown(51005)) then
+		spells[ITEM_MILLABLE] = {GetSpellInfo(51005), 1/2, 1, 1/2}
+	end
+
+	if(IsSpellKnown(31252)) then
+		spells[ITEM_PROSPECTABLE] = {GetSpellInfo(31252), 1, 1/3, 1/3}
+	end
+
+	-- I wish Blizzard could treat disenchanting the same way
+	if(IsSpellKnown(13262)) then
+		disenchanter = true
+	end
+
+	if(IsSpellKnown(1804)) then
+		rogue = true
+	end
+
+	GameTooltip:HookScript('OnTooltipSetItem', function(self)
+		local item, link = self:GetItem()
+		if(item and not InCombatLockdown() and IsAltKeyDown() and not (AuctionFrame and AuctionFrame:IsShown())) then
+			local spell, r, g, b = ScanTooltip(self, spells)
+
+			if(not spell and disenchanter and ns.Disenchantable(link)) then
+				spell, r, g, b = GetSpellInfo(13262), 1/2, 1/2, 1
+			end
+
+			if(not spell and rogue and ns.Openable(link)) then
+				spell, r, g, b = GetSpellInfo(1804), 0, 1, 1
+			end
+
+			if(not spell) then
+				return
+			end
+
+			local bag, slot = GetMouseFocus():GetParent(), GetMouseFocus()
+			if(GetContainerItemLink(bag:GetID(), slot:GetID()) == link) then
+				button:SetAttribute('macrotext', string.format('/cast %s\n/use %s %s', spell, bag:GetID(), slot:GetID()))
+				button:SetAllPoints(slot)
+				button:Show()
+				AutoCastShine_AutoCastStart(button, r, g, b)
+			end
+		end
+	end)
+
+	self:SetFrameStrata('TOOLTIP')
+	self:SetAttribute('alt-type1', 'macro')
+	self:SetScript('OnLeave', self.MODIFIER_STATE_CHANGED)
+
+	self:RegisterEvent('MODIFIER_STATE_CHANGED')
+	self:Hide()
+
+	for _, sparks in pairs(self.sparkles) do
+		sparks:SetHeight(sparks:GetHeight() * 3)
+		sparks:SetWidth(sparks:GetWidth() * 3)
+	end
 end
 
-local function Disperse(self)
+function button:MODIFIER_STATE_CHANGED(key)
+	if(not self:IsShown() and not key and key ~= 'LALT' and key ~= 'RALT') then return end
+
 	if(InCombatLockdown()) then
+		self:SetAlpha(0)
 		self:RegisterEvent('PLAYER_REGEN_ENABLED')
 	else
-		self:Hide()
 		self:ClearAllPoints()
+		self:SetAlpha(1)
+		self:Hide()
 		AutoCastShine_AutoCastStop(self)
 	end
 end
 
-function button:MODIFIER_STATE_CHANGED(event, key)
-	if(self:IsShown() and (key == 'LALT' or key == 'RALT')) then
-		Disperse(self)
-	end
-end
-
-function button:PLAYER_REGEN_ENABLED(event)
-	self:UnregisterEvent(event)
-	Disperse(self)
-end
-
-GameTooltip:HookScript('OnTooltipSetItem', function(self)
-	local item = self:GetItem()
-	if(item and Clickable()) then
-		local spell, r, g, b = ScanTooltip()
-		if(spell) then
-			local bag, slot = GetMouseFocus():GetParent(), GetMouseFocus()
-			button:SetAttribute('macrotext', macro:format(spell, bag:GetID(), slot:GetID()))
-			button:SetAllPoints(slot)
-			button:Show()
-			AutoCastShine_AutoCastStart(button, r, g, b)
-		end
-	end
-end)
-
-function button:PLAYER_LOGIN()
-	if(IsSpellKnown(51005)) then
-		spells[ITEM_MILLABLE] = {GetSpellInfo(51005), 0.5, 1, 0.5}
-	end
-
-	if(IsSpellKnown(31252)) then
-		spells[ITEM_PROSPECTABLE] = {GetSpellInfo(31252), 1, 0.5, 0.5}
-	end
-end
-
-do
-	button:SetScript('OnLeave', Disperse)
-	button:SetScript('OnEvent', function(self, event, ...) self[event](self, event, ...) end)
-	button:SetFrameStrata('DIALOG')
-	button:RegisterEvent('MODIFIER_STATE_CHANGED')
-	button:RegisterEvent('PLAYER_LOGIN')
-	button:RegisterForClicks('LeftButtonUp')
-	button:SetAttribute('*type*', 'macro')
-	button:Hide()
-
-	for _, sparks in pairs(button.sparkles) do
-		sparks:SetHeight(sparks:GetHeight() * 3)
-		sparks:SetWidth(sparks:GetWidth() * 3)
-	end
+function button:PLAYER_REGEN_ENABLED()
+	self:UnregisterEvent('PLAYER_REGEN_ENABLED')
+	self:MODIFIER_STATE_CHANGED()
 end

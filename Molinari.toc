@@ -1,11 +1,13 @@
 ## Interface: 30300
 ## Author: p3lim
-## Version: 30300.6-Beta
+## Version: 40300.20-Beta
 ## Title: Molinari
-## Notes: One-click Milling & Prospecting!
-## X-Curse-Packaged-Version: 30300.6-Beta
+## Notes: One-click Milling, Prospecting, Disenchanting and Lockpicking!
+## X-Curse-Packaged-Version: 40300.20-Beta
 ## X-Curse-Project-Name: Molinari
 ## X-Curse-Project-ID: molinari
 ## X-Curse-Repository-ID: wow/molinari/mainline
 
 Molinari.lua
+Disenchanting.lua
+Lockpicking.lua
